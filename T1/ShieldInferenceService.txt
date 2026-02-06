@@ -1,0 +1,96 @@
+import * as SQLite from 'expo-sqlite';
+import { loadTensorflowModel } from 'react-native-fast-tflite';
+import { Asset } from 'expo-asset';
+// Import your converted JSON
+import xaiWeights from '../assets/models/xai_weights.json';
+
+const db = SQLite.openDatabaseSync('vitals.db');
+
+const normalize = (val: number, min: number, max: number) => {
+  if (val === 0) return 0;
+  return (val - min) / (max - min);
+};
+
+export const runShieldInference = async () => {
+  console.log('🤖 [SHIELD AI] Starting Inference with XAI weights...');
+
+  try {
+    const records = db.getAllSync(
+      `SELECT heart_rate, hrv, spo2, bp_systolic, bp_diastolic 
+       FROM vitals 
+       ORDER BY recorded_at DESC LIMIT 60`
+    ) as any[];
+
+    if (records.length < 60) {
+      console.warn('⚠️ [SHIELD AI] Insufficient data.');
+      return false;
+    }
+
+    // 1. Prepare Input Buffer
+    const inputBuffer = new Float32Array(300);
+    records.forEach((row, i) => {
+      const offset = i * 5;
+      inputBuffer[offset] = normalize(row.heart_rate || 70, 40, 180);
+      inputBuffer[offset + 1] = normalize(row.hrv || 50, 10, 150);
+      inputBuffer[offset + 2] = normalize(row.spo2 || 98, 80, 100);
+      inputBuffer[offset + 3] = normalize(row.bp_systolic || 120, 80, 200);
+      inputBuffer[offset + 4] = normalize(row.bp_diastolic || 80, 50, 120);
+    });
+
+    // 2. Load and Run Model
+    const modelAsset = Asset.fromModule(require('../assets/models/shield_v2.tflite'));
+    await modelAsset.downloadAsync();
+    const model = await loadTensorflowModel(modelAsset.localUri!);
+    const outputs = await model.run([inputBuffer]);
+    const rawResult = Array.from(outputs[0] as Float32Array)[0];
+    const riskScore = rawResult * 100;
+
+    // 3. XAI Reasoning Engine (Using your JSON weights)
+    // We map the database keys to the XAI weight keys
+    const latest = records[0];
+    const reasonCodes: string[] = [];
+
+    // Logic: If risk is elevated, identify the "Primary Driver"
+    if (riskScore > 40) {
+      const impactScores = [
+        {
+          name: 'Heart Rate',
+          impact:
+            normalize(latest.heart_rate, 40, 180) *
+            (typeof xaiWeights.HR === 'number' ? xaiWeights.HR : 0.12),
+        },
+        { name: 'HRV', impact: (1 - normalize(latest.hrv, 10, 150)) * 0.25 }, // HRV is inverse (low is bad)
+        { name: 'Blood Pressure', impact: normalize(latest.bp_systolic, 80, 200) * 0.3 },
+        { name: 'Oxygen', impact: (1 - normalize(latest.spo2, 80, 100)) * 0.1 },
+      ];
+
+      // Sort to find the highest impact factor
+      const topFactor = impactScores.sort((a, b) => b.impact - a.impact)[0];
+      reasonCodes.push(`Primary Driver: ${topFactor.name}`);
+
+      // Secondary clinical thresholds
+      if (latest.bp_systolic > 140) reasonCodes.push('Hypertension Detected');
+      if (latest.hrv < 30) reasonCodes.push('High Autonomic Stress');
+    } else {
+      reasonCodes.push('Vitals within stable range');
+    }
+
+    // 4. Determine Label
+    let label = 'Low';
+    if (riskScore > 70) label = 'High';
+    else if (riskScore > 40) label = 'Medium';
+
+    // 5. Save to Local Database
+    db.runSync(
+      `INSERT INTO risk_assessments (patient_id, risk_score, risk_label, reason_codes) 
+       VALUES (?, ?, ?, ?)`,
+      ['test-patient-uuid', riskScore, label, JSON.stringify(reasonCodes)]
+    );
+
+    console.log(`✅ [SHIELD AI] Inference Saved. Score: ${riskScore.toFixed(1)}%`);
+    return true;
+  } catch (error) {
+    console.error('❌ [SHIELD AI] Error:', error);
+    return false;
+  }
+};
