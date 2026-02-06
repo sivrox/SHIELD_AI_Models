@@ -1,0 +1,85 @@
+------DB Utility------
+import psycopg2
+import os
+
+def save_analyzed_report(patient_id, file_name, analysis, severity):
+    conn = psycopg2.connect(
+        host=os.getenv("PG_HOST"),
+        database=os.getenv("PG_DB"),
+        user=os.getenv("PG_USER"),
+        password=os.getenv("PG_PASSWORD"),
+        port=os.getenv("PG_PORT", "5432")
+    )
+
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO analyzed_reports (patient_id, file_name, analysis, severity_level)
+        VALUES (%s, %s, %s, %s)
+    """, (patient_id, file_name, analysis, severity))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+------Chatbot API Endpoint------
+
+from fastapi import APIRouter
+from rag_chatbot import ask_shield_chatbot
+
+router = APIRouter()
+
+@router.post("/medical/chat", response_model=ChatResponse)
+def medical_chat(req: ChatRequest):
+    answer = ask_shield_chatbot(req.question)
+    return {"answer": answer}
+
+------Report Analyzer API Endpoint------
+
+from fastapi import UploadFile, File, Form
+from rag_analyzer import analyze_medical_file
+from safety import detect_emergency
+from db_utils import save_analyzed_report
+import shutil
+import tempfile
+import os
+
+@router.post("/medical/analyze-report", response_model=ReportResponse)
+async def analyze_report(
+    patient_id: int = Form(...),
+    file: UploadFile = File(...)
+):
+    # Save uploaded file temporarily
+    with tempfile.NamedTemporaryFile(delete=False) as temp:
+        shutil.copyfileobj(file.file, temp)
+        temp_path = temp.name
+
+    try:
+        analysis = analyze_medical_file(temp_path)
+
+        # Detect severity from final analysis
+        severity = detect_emergency(analysis)
+
+        # Save result to DB
+        save_analyzed_report(
+            patient_id=patient_id,
+            file_name=file.filename,
+            analysis=analysis,
+            severity=severity
+        )
+
+        return {
+            "message": "Report analyzed and saved successfully",
+            "analysis": analysis
+        }
+
+    finally:
+        os.remove(temp_path)
+
+------main.py------ 
+
+from fastapi import FastAPI
+from medical_routes import router as medical_router
+
+app = FastAPI()
+
+app.include_router(medical_router)
