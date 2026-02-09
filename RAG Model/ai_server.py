@@ -12,7 +12,6 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# --- CONFIGURATION ---
 API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL_ID = "gemini-2.5-flash-preview-09-2025"
 DB_PATH = os.path.join(os.path.dirname(__file__), "shield_medical_db")
@@ -53,18 +52,24 @@ def ask_ai():
 
     # GENERATE RESPONSE
     prompt = f"""
-Role: S.H.I.E.L.D. Medical Assistant.
-Patient Profile: {user_profile}
-Patient Vitals: {vitals_context}
-Guidelines: {guidelines}
+    Role: S.H.I.E.L.D. Medical Assistant.
+    Patient Profile: {user_profile}
+    Patient Vitals & Trends: {vitals_context}
+    CLINICAL GUIDELINES:: {guidelines}
 
-Question: {user_query}
+    Question: {user_query}
 
-Instructions:
-1. Use the Guidelines to explain the Vitals contextually.
-2. Highlight values that look abnormal according to Guidelines.
-3. NEVER diagnose or prescribe. 
-4. Be concise (max 3-4 sentences).
+    Instructions:
+    1. Speak in plain, simple English that anyone can understand. Avoid complex medical terms.
+    2. Explain Current/Latest data using the current Activity level. 
+    3. CRITICAL RULE: When discussing "24-hour Averages" or "Trends," IGNORE the current Activity level. Averages represent the whole day (including sleep/rest), so current exercise is irrelevant to the average.
+    4. Highlight values that look abnormal according to Guidelines.
+    5. NEVER diagnose or prescribe. 
+    6. Include the risk assessment status in your explanation if relevant.
+    7. FORMATTING: Use exactly two small paragraphs. Separate them with a double newline (\n\n). 
+    8. Do NOT use markdown (no bold/italics).
+    9. STRICT WORD LIMIT: Total response must be under 80 words.
+    10 If information is missing, clearly say so.
 """
 
     raw_answer = get_gemini_response(prompt)
