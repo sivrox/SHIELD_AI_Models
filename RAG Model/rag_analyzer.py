@@ -6,6 +6,9 @@ import requests
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from safety_layer import detect_emergency, severity_warning, apply_post_safety
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ======================================================
 # CONFIGURATION
