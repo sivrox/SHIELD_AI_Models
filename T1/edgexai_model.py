@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import tensorflow as tf
 import keras_tuner as kt
@@ -6,16 +7,44 @@ from sklearn.metrics import mean_absolute_error
 import shap
 import joblib
 
-# --- STEP 1: DATA INGESTION & IMPUTATION ---
+# # --- STEP 1: DATA INGESTION & IMPUTATION ---
+# def load_and_impute():
+#     print("📥 Loading windows, labels, and context...")
+#     X = np.load('X_windows.npy')    # (Samples, 60, 5)
+#     y = np.load('y_labels.npy')     # (Samples,)
+#     context = np.load('X_context.npy') # (Samples, 3) - Age, Activity, Sleep
+    
+#     # IMPUTATION: If there are any NaNs (missing data), we fill them with 0 (The Mean)
+#     # This ensures the model doesn't crash during live streaming.
+#     X = np.nan_to_num(X, nan=0.0)
+    
+#     return X, y, context
+
+# --- STEP 1: CORRECTED DATA INGESTION ---
 def load_and_impute():
     print("📥 Loading windows, labels, and context...")
-    X = np.load('X_windows.npy')    # (Samples, 60, 5)
-    y = np.load('y_labels.npy')     # (Samples,)
-    context = np.load('X_context.npy') # (Samples, 3) - Age, Activity, Sleep
     
-    # IMPUTATION: If there are any NaNs (missing data), we fill them with 0 (The Mean)
-    # This ensures the model doesn't crash during live streaming.
+    # Load raw data
+    X = np.load('X_windows.npy')    # Expected: (Samples, 60, 5)
+    y = np.load('y_labels.npy')     # (Samples,)
+    context = np.load('X_context.npy') # (Samples, 3)
+    
+    # 1. Verification of Vitals Order
+    # The App expects: [HR, HRV, SPO2, BP_S, BP_D]
+    # Ensure your window creation script used these indices: [1, 3, 5, 2, 4]
+    
+    if X.shape[2] != 5:
+        raise ValueError(f"CRITICAL: Model expects 5 vitals, but found {X.shape[2]}. "
+                         "Check your window creation script!")
+
+    # 2. IMPUTATION
+    # We use 0.0 because the data is likely already Z-Score normalized 
+    # (where 0 is the mean). If not normalized, use np.nanmean().
     X = np.nan_to_num(X, nan=0.0)
+    context = np.nan_to_num(context, nan=0.0)
+    
+    print(f"✅ Data loaded. Window Shape: {X.shape}")
+    print(f"📊 Features assumed: [HR, HRV, SPO2, BP_S, BP_D]")
     
     return X, y, context
 
@@ -60,31 +89,70 @@ def train_federated(X_train, y_train, best_hps):
         
     return global_model
 
-# --- STEP 4: OFFLINE SHAP VALIDATION (The Reason Code Engine) ---
-def validate_with_shap(model, X_train, context_train):
-    print("\n🔍 Performing Offline SHAP Validation for Reason Codes...")
+# # --- STEP 4: OFFLINE SHAP VALIDATION (The Reason Code Engine) ---
+# def validate_with_shap(model, X_train, context_train):
+#     print("\n🔍 Performing Offline SHAP Validation for Reason Codes...")
     
-    # We use a small background sample to explain the model's behavior
-    background = X_train[np.random.choice(X_train.shape[0], 100, replace=False)]
+#     # We use a small background sample to explain the model's behavior
+#     background = X_train[np.random.choice(X_train.shape[0], 100, replace=False)]
+#     explainer = shap.GradientExplainer(model, background)
+    
+#     # Calculate SHAP values for the vitals (The 5 in the window)
+#     shap_values = explainer.shap_values(background)
+    
+#     # Calculate Global Feature Importance
+#     vitals_importance = np.abs(shap_values[0]).mean(axis=(0, 1))
+#     vitals_list = ['HR', 'HRV', 'SPO2', 'BP_S', 'BP_D']
+    
+#     # Store these weights. The App uses these to decide the 'Reason'.
+#     xai_weights = dict(zip(vitals_list, vitals_importance))
+    
+#     # Add manual context weights (Age/Sleep/Activity) for the RAG engine
+#     xai_weights['AGE'] = 0.15
+#     xai_weights['ACTIVITY'] = 0.10
+#     xai_weights['SLEEP'] = 0.20
+    
+#     joblib.dump(xai_weights, 'shield_xai_weights.pkl')
+#     print("✅ Reason Code weights saved to 'shield_xai_weights.pkl'")
+#     return xai_weights
+
+# --- STEP 4: REFIXED for 5 Vitals ---
+def validate_with_shap(model, X_train, context_train):
+    print("\n🔍 Performing SHAP Validation...")
+    
+    # 1. Select background and explain
+    background = X_train[np.random.choice(X_train.shape[0], 50, replace=False)]
     explainer = shap.GradientExplainer(model, background)
     
-    # Calculate SHAP values for the vitals (The 5 in the window)
+    # 2. Get SHAP values
+    # shape will be (samples, 60, 5)
     shap_values = explainer.shap_values(background)
     
-    # Calculate Global Feature Importance
-    vitals_importance = np.abs(shap_values[0]).mean(axis=(0, 1))
+    # Handle both list and array outputs from SHAP (sometimes it returns a list)
+    if isinstance(shap_values, list):
+        shap_data = shap_values[0]
+    else:
+        shap_data = shap_values
+
+    # 3. Calculate importance for each of the 5 features
+    # We mean across samples (axis 0) and across time steps (axis 1)
+    # This results in exactly 5 values
+    vitals_importance = np.abs(shap_data).mean(axis=(0, 1))
+    
     vitals_list = ['HR', 'HRV', 'SPO2', 'BP_S', 'BP_D']
     
-    # Store these weights. The App uses these to decide the 'Reason'.
-    xai_weights = dict(zip(vitals_list, vitals_importance))
+    # 4. Create clean dictionary with standard floats
+    xai_weights = {}
+    for i in range(len(vitals_list)):
+        xai_weights[vitals_list[i]] = float(vitals_importance[i])
     
-    # Add manual context weights (Age/Sleep/Activity) for the RAG engine
-    xai_weights['AGE'] = 0.15
-    xai_weights['ACTIVITY'] = 0.10
-    xai_weights['SLEEP'] = 0.20
+    # 5. Save to JSON
+    with open('shield_weights.json', 'w') as f:
+        json.dump(xai_weights, f)
+        
+    print("✅ Successfully saved 5 vitals to shield_weights.json")
+    print("Weights found:", xai_weights)
     
-    joblib.dump(xai_weights, 'shield_xai_weights.pkl')
-    print("✅ Reason Code weights saved to 'shield_xai_weights.pkl'")
     return xai_weights
 
 # --- EXECUTION ---
@@ -104,10 +172,37 @@ weights = validate_with_shap(final_model, X_train, c_train)
 
 # D. Export to TFLite
 final_model.save('shield_v2.h5')
-converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
-converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
-tflite_model = converter.convert()
-with open('shield_v2.tflite', 'wb') as f:
-    f.write(tflite_model)
+# converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
+# converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
+# tflite_model = converter.convert()
+# with open('shield_v2.tflite', 'wb') as f:
+#     f.write(tflite_model)
+
+# converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
+
+run_model = tf.function(lambda x: final_model(x))
+concrete_func = run_model.get_concrete_function(
+    tf.TensorSpec([1, 60, 5], final_model.inputs[0].dtype)
+)
+
+# 2. Convert from the concrete function instead of the Keras model
+converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_func])
+
+# 2. FORCE Built-ins only (This removes the "unresolved-ops" error)
+converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS]
+
+# 3. Handle LSTM/RNN conversion if the model uses them
+# (This lowers complex ops to basic ones that mobile supports)
+converter._experimental_lower_tensor_list_ops = True
+
+try:
+    tflite_model = converter.convert()
+    with open('shield_v2.tflite', 'wb') as f:
+        f.write(tflite_model)
+    print("Success: Model exported with TFLITE_BUILTINS only.")
+except Exception as e:
+    print("Error: Model uses operations not supported by standard TFLite.")
+    print("Consider replacing complex layers (like LSTMs) with simpler ones or check activations.")
+    print(e)
 
 print("\n🚀 S.H.I.E.L.D. Deployment Package Ready!")

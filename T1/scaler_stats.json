@@ -1,0 +1,42 @@
+{
+  "hr": {
+    "mean": 102.65425813293808,
+    "std": 35.89854886230599,
+    "type": "numerical"
+  },
+  "bp_s": {
+    "mean": 139.18869429196576,
+    "std": 33.622844616676375,
+    "type": "numerical"
+  },
+  "hrv": {
+    "mean": 46.760883027522944,
+    "std": 22.951722789117486,
+    "type": "numerical"
+  },
+  "bp_d": {
+    "mean": 97.21956422018349,
+    "std": 23.638032735848846,
+    "type": "numerical"
+  },
+  "spo2": {
+    "mean": 92.39116972477065,
+    "std": 4.333985383021232,
+    "type": "numerical"
+  },
+  "activity_level": {
+    "mean": 0.0,
+    "std": 1.0,
+    "type": "categorical"
+  },
+  "age": {
+    "mean": 55.51146788990825,
+    "std": 21.449398876125898,
+    "type": "numerical"
+  },
+  "sleep": {
+    "mean": 6.3525,
+    "std": 1.3184533534889655,
+    "type": "numerical"
+  }
+}
