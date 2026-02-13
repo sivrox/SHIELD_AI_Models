@@ -8,7 +8,7 @@ import shap
 
 # 1. DATA PREPARATION
 data = pd.read_csv('combined_dataset.csv')
-print(f"📊 CSV Columns: {data.columns.tolist()}")
+print(f"CSV Columns: {data.columns.tolist()}")
 
 # Define feature list
 features_in_csv = ['hr', 'bp_s', 'hrv', 'bp_d', 'spo2', 'activity', 'age', 'sleep']
@@ -73,11 +73,11 @@ model = tf.keras.Sequential([
 
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-print("\n🚀 Training with 8 features...")
+print("\nTraining with 8 features...")
 model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.1)
 
 # 3. SHAP & EXPORT
-print("\n🔍 Calculating SHAP importance...")
+print("\nCalculating SHAP importance...")
 background = X_train[np.random.choice(X_train.shape[0], 50, replace=False)]
 explainer = shap.GradientExplainer(model, background)
 shap_values = explainer.shap_values(X_test[:50])
@@ -98,4 +98,4 @@ tflite_model = converter.convert()
 
 with open('shield_v3.tflite', 'wb') as f: f.write(tflite_model)
 
-print("\n✅ Deployment files ready: shield_v3.tflite, shield_weights.json, scaler_stats.json")
+print("\nDeployment files ready: shield_v3.tflite, shield_weights.json, scaler_stats.json")
