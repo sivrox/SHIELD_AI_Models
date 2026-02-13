@@ -1,3 +1,5 @@
+#AI Chatbot
+
 import os
 import time
 import requests
@@ -8,9 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ======================================================
-# CONFIGURATION
-# ======================================================
+#CONFIGURATION
 
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
@@ -19,13 +19,9 @@ if not API_KEY:
 MODEL_ID = "gemini-2.5-flash-preview-09-2025"
 DB_PATH = os.getenv("VECTOR_DB_PATH", "shield_medical_db")
 
-# ======================================================
-# CHATBOT
-# ======================================================
-
+#CHATBOT
 def ask_shield_chatbot(user_query):
-    # ---------- SAFETY PRE-CHECK ----------
-    severity = detect_emergency(user_query)
+    severity = detect_emergency(user_query) #Safety pre-check
     if severity:
         return severity_warning(severity) + apply_post_safety("")
 
