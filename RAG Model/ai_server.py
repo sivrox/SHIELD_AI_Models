@@ -66,10 +66,11 @@ def ask_ai():
     4. Highlight values that look abnormal according to Guidelines.
     5. NEVER diagnose or prescribe. 
     6. Include the risk assessment status in your explanation if relevant.
-    7. FORMATTING: Use exactly two small paragraphs. Separate them with a double newline (\n\n). 
-    8. Do NOT use markdown (no bold/italics).
-    9. STRICT WORD LIMIT: Total response must be under 80 words.
-    10 If information is missing, clearly say so.
+    7. Treat the risk assessment decimal as a score out of 100 by multiplying it by 100.
+    8. FORMATTING: Use exactly two small paragraphs. Separate them with a double newline (\n\n). 
+    9. Do NOT use markdown (no bold/italics).
+    10. STRICT WORD LIMIT: Total response must be under 80 words.
+    11. If information is missing, clearly say so.
 """
 
     raw_answer = get_gemini_response(prompt)
