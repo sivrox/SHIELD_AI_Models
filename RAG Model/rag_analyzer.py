@@ -1,3 +1,5 @@
+#AI Report Analyzer
+
 import os
 import time
 import base64
@@ -10,10 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ======================================================
-# CONFIGURATION
-# ======================================================
-
+#CONFIGURATION
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise RuntimeError("GEMINI_API_KEY not set")
@@ -21,10 +20,7 @@ if not API_KEY:
 MODEL_ID = "gemini-2.5-flash-preview-09-2025"
 DB_PATH = os.getenv("VECTOR_DB_PATH", "shield_medical_db")
 
-# ======================================================
-# HELPERS
-# ======================================================
-
+#HELPER FUNCTIONS
 def encode_file(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
@@ -73,9 +69,7 @@ CLINICAL GUIDELINES:
         return "The report could not be analyzed."
 
     answer = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-
-    # ---------- SAFETY POST-CHECK ----------
-    severity = detect_emergency(answer)
+    severity = detect_emergency(answer) #Safety Post-Check
     if severity:
         return severity_warning(severity) + apply_post_safety(answer)
 
