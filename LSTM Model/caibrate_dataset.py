@@ -6,25 +6,23 @@ import os
 from dataclasses import dataclass
 from sklearn.metrics import roc_auc_score
 
-# === configuration ===
+#configuration
 n_patients = 30
 n_hospitals = 3
 duration_hours = 48
-sample_interval = 5 # seconds
+sample_interval = 5
 seed = 42
 output_file = 'LSTM Model/shield_training_dataset.csv'
 
-# File paths - adjust these to match your folder structure
+#file paths
 uci_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'datasets/uci_data')
 mitbih_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'datasets/mit_bih_data')
 
-# Activity states
+#defining activity states
 sleep, rest, active, exercise = 0, 1, 2, 3
 
-# ============================================================
-# step 1: Load UCI Heart Disease Dataset
-# Extracts: age, resting bp, max hr, disease prevalence by age
-# ============================================================
+#Load UCI Heart Disease Dataset
+#Extracts: age, resting bp, max hr, disease prevalence by age
 
 def load_uci_data():
     #Load all 4 uci center files and extract clinical distributions
@@ -66,13 +64,8 @@ def load_uci_data():
     return dist
 
 
-# ============================================================
-# step 2: Load mit-bih Arrhythmia Database
-# Reads ecg files, detects r-peaks, computes real hr and hrv
-# Requires: pip install wfdb
-# ============================================================
-
-def load_mitbih_data():
+#Load mit-bih Arrhythmia Database
+#Reads ecg files, detects r-peaks, computes real hr and hrv
     """
     Process mit-bih ecg recordings to extract real hr and hrv distributions.
     Each record has .dat (signal), .hea (header), .atr (annotations) files.
@@ -80,11 +73,13 @@ def load_mitbih_data():
     - hr from r-r intervals (60 / interval_seconds)
     - hrv as rmssd (root mean square of successive r-r differences)
     """
+
+def load_mitbih_data():
     try:
         import wfdb
     except ImportError:
-        print("  warning: wfdb not installed. Run: pip install wfdb")
-        print("  Using published mit-bih reference values instead.")
+        print("warning: wfdb not installed.")
+        print("Using published mit-bih reference values instead.")
         return get_mitbih_fallback_values()
 
     # Standard mit-bih record numbers
@@ -102,9 +97,9 @@ def load_mitbih_data():
         if not os.path.exists(rec_path + '.dat'):
             continue
         try:
-            # Read beat annotations (r-peak positions)
+            #Read beat annotations (r-peak positions)
             ann = wfdb.rdann(rec_path, 'atr')
-            # Filter to only beat annotations (not comments or rhythm changes)
+            #Filter to only beat annotations
             beat_types = ['n','l','r','b','a','a','j','s','v','r','f','e','j','n','e','/','f','q','?']
             beat_mask = [s in beat_types for s in ann.symbol]
             beat_samples = ann.sample[beat_mask]
@@ -139,7 +134,7 @@ def load_mitbih_data():
             continue # skip corrupted records
 
     if records_processed == 0:
-        print("  warning: No mit-bih records found. Using published values.")
+        print("warning: No mit-bih records found. Using published values.")
         return get_mitbih_fallback_values()
 
     all_hr = np.array(all_hr)
@@ -164,8 +159,8 @@ def load_mitbih_data():
     return dist
 
 
+#Published mit-bih statistics (Moody & Mark 2001, Shaffer & Ginsberg 2017).
 def get_mitbih_fallback_values():
-    """Published mit-bih statistics (Moody & Mark 2001, Shaffer & Ginsberg 2017)."""
     return {
         'hr_mean': 75.0, 'hr_std': 18.0,
         'hr_min': 50.0, 'hr_max': 110.0,
@@ -175,11 +170,8 @@ def get_mitbih_fallback_values():
     }
 
 
-# ============================================================
-# step 3: Patient Profile Definition
-# Each patient's baseline vitals are derived from the real
-# distributions extracted in Steps 1 and 2
-# ============================================================
+#Patient Profile Definition
+#Each patient's baseline vitals are derived from the real
 
 @dataclass
 class PatientProfile:
@@ -197,8 +189,8 @@ class PatientProfile:
     baseline_bp_d: float = 0.0
     avg_sleep: float = 7.0
 
+    #Set physiological baselines using real clinical distributions.
     def compute_baselines(self, uci_dist, mitbih_dist):
-        """Set physiological baselines using real clinical distributions."""
         age_norm = (self.age - 20) / 57
         unfit = 1.0 - self.fitness
 
@@ -235,12 +227,10 @@ class PatientProfile:
         self.avg_sleep = np.clip(self.avg_sleep, 3.5, 9.0)
 
 
-# ============================================================
-# step 4: Patient Cohort Generator
-# ============================================================
+#Patient Cohort Generator
+#Generate uae-focused cohort using real disease prevalence from uci.
 
 def generate_cohort(uci_dist, mitbih_dist):
-    """Generate uae-focused cohort using real disease prevalence from uci."""
     rng = np.random.RandomState(seed)
     patients = []
 
@@ -280,12 +270,10 @@ def generate_cohort(uci_dist, mitbih_dist):
     return patients
 
 
-# ============================================================
-# step 5: Vital Sign Simulation
-# ============================================================
+#Vital Sign Simulation
+#Create a realistic 48h activity cycle: sleep/rest/active/exercise.
 
 def make_activity_schedule(rng):
-    """Create a realistic 48h activity cycle: sleep/rest/active/exercise."""
     n = (duration_hours * 3600) // sample_interval
     schedule = np.full(n, rest, dtype=np.int32)
     sph = 3600 // sample_interval
@@ -314,9 +302,8 @@ def make_activity_schedule(rng):
 
     return schedule[:n]
 
-
+#Generate 48h of continuous vital signs for one patient.
 def simulate_vitals(patient, uci_dist):
-    """Generate 48h of continuous vital signs for one patient."""
     rng = np.random.RandomState(patient.patient_id * 7 + 13)
     n = (duration_hours * 3600) // sample_interval
     p = patient
@@ -372,7 +359,7 @@ def simulate_vitals(patient, uci_dist):
             ramp[-rl:] = np.linspace(1, 0, rl)
         event_mask[start:end] = np.maximum(event_mask[start:end], sev * ramp)
 
-    # Main simulation: smooth transitions + noise + stress perturbations
+    #Main simulation: smooth transitions + noise + stress perturbations
     for t in range(1, n):
         act, ev = activity[t], event_mask[t]
         hr[t] = hr[t-1] + alpha * (hr_tgt[act] + ev*40 - hr[t-1]) + rng.normal(0, noise['hr'])
@@ -381,7 +368,7 @@ def simulate_vitals(patient, uci_dist):
         bp_s[t] = bp_s[t-1] + alpha * (bps_tgt[act] + ev*28 - bp_s[t-1]) + rng.normal(0, noise['bps'])
         bp_d[t] = bp_d[t-1] + alpha * (bpd_tgt[act] + ev*14 - bp_d[t-1]) + rng.normal(0, noise['bpd'])
 
-    # Clip to valid physiological ranges
+    #Clip to valid physiological ranges
     hr = np.clip(np.round(hr, 1), 38, 210)
     hrv = np.clip(np.round(hrv, 1), 5, 120)
     spo2 = np.clip(np.round(spo2, 1), 82, 100)
@@ -409,13 +396,10 @@ def simulate_vitals(patient, uci_dist):
         'activity': activity_out, 'sleep': sleep_arr})
 
 
-# ============================================================
-# step 6: Stress Score Computation
-# Multi-feature, activity-aware, with interaction terms
-# ============================================================
+#Stress Score Computation
 
+#Compute cardiovascular stress score (0.0 to 1.0) for every row.
 def compute_stress_score(df):
-    """Compute cardiovascular stress score (0.0 to 1.0) for every row."""
     hr, hrv, spo2 = df['hr'].values, df['hrv'].values, df['spo2'].values
     bp_s, bp_d = df['bp_s'].values, df['bp_d'].values
     age, activity, sleep = df['age'].values, df['activity'].values, df['sleep'].values
@@ -455,12 +439,10 @@ def compute_stress_score(df):
     return np.round(np.clip(stress + noise, 0.0, 1.0), 4)
 
 
-# ============================================================
-# step 7: Validation
-# ============================================================
+#Validation
 
+#Compare generated data against real clinical distributions.
 def validate(df, uci_dist, mitbih_dist):
-    """Compare generated data against real clinical distributions."""
     rest = df[df['activity'] == 0]
     ex = df[df['activity'] == 2]
 
@@ -498,14 +480,10 @@ def validate(df, uci_dist, mitbih_dist):
               f"{len(hdf):,} samples, stress={hdf.stress_score.mean():.3f}")
 
 
-# ============================================================
-# main
-# ============================================================
+#main
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("S.H.I.E.L.D Dataset Calibrator")
-    print("=" * 60)
+    print("S.H.I.E.L.D Dataset Calibrator\n")
 
     # Load real clinical data
     print("\n[1/6] Loading UCI Heart Disease Dataset...")
@@ -541,6 +519,4 @@ if __name__ == "__main__":
     # Save
     full_df.to_csv(output_file, index=False)
     size_mb = os.path.getsize(output_file) / (1024 * 1024)
-    print(f"\n{'='*60}")
-    print(f"Saved: {output_file} ({full_df.shape[0]:,} rows, {size_mb:.1f} mb)")
-    print(f"{'='*60}")
+    print(f"\nSaved: {output_file} ({full_df.shape[0]:,} rows, {size_mb:.1f} mb)")
