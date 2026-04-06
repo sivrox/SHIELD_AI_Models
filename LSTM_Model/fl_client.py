@@ -119,7 +119,7 @@ def download_global_weights():
 
 def train_locally(model, X, y):
     """Train the model on local hospital data."""
-    print(f"  Training locally for {local_epochs} epochs...")
+    print(f"  \nTraining locally for {local_epochs} epochs...")
     history = model.fit(X, y, epochs=local_epochs, batch_size=batch_size,
                         validation_split=0.1, verbose=1)
     final_loss = history.history['loss'][-1]
@@ -146,6 +146,7 @@ def submit_weights(model, n_samples, client_id):
 # === Main ===
 
 def main():
+    global server_url
     parser = argparse.ArgumentParser(description="S.H.I.E.L.D. FL Client")
     parser.add_argument('--client-id', type=str, required=True,
                         help='Unique client identifier (e.g. hospital_0)')
@@ -157,10 +158,9 @@ def main():
                         help='FL server URL')
     args = parser.parse_args()
 
-    global server_url
     server_url = args.server
 
-    print(f"S.H.I.E.L.D FL Client: {args.client_id}\n")
+    print(f"\nS.H.I.E.L.D FL Client: {args.client_id}\n")
 
     # Step 1: Load local hospital data
     X, y = load_hospital_data(args.data, args.hospital)
@@ -179,9 +179,7 @@ def main():
     print("\n[3/3] Submitting weights to FL server...")
     result = submit_weights(local_model, len(X), args.client_id)
 
-    print(f"\n{'='*50}")
-    print(f"Client {args.client_id} - FL round complete")
-    print(f"{'='*50}")
+    print(f"\nClient {args.client_id} - FL round complete")
 
 if __name__ == "__main__":
     main()

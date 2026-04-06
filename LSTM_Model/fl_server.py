@@ -31,7 +31,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
-# === CONFIG ===
+#Configuration
 model_dir = 'outputs'
 global_model_path = os.path.join(model_dir, 'shield_global.keras')
 tflite_path = os.path.join(model_dir, 'shield.tflite')
@@ -46,14 +46,14 @@ os.makedirs(model_dir, exist_ok=True)
 app = FastAPI(title="S.H.I.E.L.D FL Server", version="1.0")
 
 
-# === Model Builder (must match training pipeline exactly) ===
+#Build Model
 
 def build_model():
     model = tf.keras.Sequential([
-        tf.keras.layers.InputLayer(input_shape=(window_size, n_features)),
-        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64, return_sequences=True)),
+        tf.keras.layers.InputLayer(batch_input_shape=(1, window_size, n_features)),
+        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64, return_sequences=True, unroll=True)),
         tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(32, return_sequences=False)),
+        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(32, return_sequences=False, unroll=True)),
         tf.keras.layers.Dropout(0.3),
         tf.keras.layers.Dense(32, activation='relu'),
         tf.keras.layers.Dropout(0.2),
@@ -91,11 +91,11 @@ class FLState:
             'client_id': client_id,
             'timestamp': datetime.now().isoformat()
         })
-        print(f"  Received update from {client_id} ({n_samples} samples)")
+        print(f"Received update from {client_id} ({n_samples} samples)")
 
     def aggregate(self):
         """Run FedAvg: weighted average of all pending client weights."""
-        if len(self.pending_updates) < MIN_CLIENTS:
+        if len(self.pending_updates) < min_clients:
             return False
 
         self.round += 1
@@ -113,7 +113,7 @@ class FLState:
 
         # Update global model
         self.global_model.set_weights(new_weights)
-        self.global_model.save_weights(global_model_path)
+        self.global_model.save(global_model_path)
 
         # Export updated TFLite
         self.export_tflite()
@@ -134,10 +134,7 @@ class FLState:
 
     def export_tflite(self):
         """Convert current global model to TFLite format."""
-        run_model = tf.function(lambda x: self.global_model(x))
-        concrete = run_model.get_concrete_function(
-            tf.TensorSpec([1, window_size, n_features], tf.float32))
-        converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete])
+        converter = tf.lite.TFLiteConverter.from_keras_model(self.global_model)
         tflite_bytes = converter.convert()
         with open(tflite_path, 'wb') as f:
             f.write(tflite_bytes)

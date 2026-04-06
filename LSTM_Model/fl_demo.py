@@ -49,11 +49,11 @@ def run_client(client_id, hospital_id):
     return result.returncode == 0
 
 def main():
-    print("S.H.I.E.L.D Federated Learning Demo\n")
+    print("\nS.H.I.E.L.D Federated Learning Demo")
 
     # Check dataset exists
     if not os.path.exists(dataset):
-        print(f"ERROR: {dataset} not found. Run shield_dataset_generator.py first.")
+        print(f"ERROR: {dataset} not found.")
         sys.exit(1)
 
     # Start FL server in background
@@ -68,8 +68,8 @@ def main():
         sys.exit(1)
 
     # Check server status
-    status = requests.get(f"{SERVER_URL}/").json()
-    print(f"  Server running — Round: {status['current_round']}")
+    status = requests.get(f"{server_url}/").json()
+    print(f"Server running — Round: {status['current_round']}")
 
     # Run 3 hospital clients sequentially
     print("\n[2/4] Running FL clients (3 hospitals)...")
