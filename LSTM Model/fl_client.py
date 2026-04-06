@@ -160,9 +160,7 @@ def main():
     global server_url
     server_url = args.server
 
-    print("=" * 50)
-    print(f"S.H.I.E.L.D FL Client: {args.client_id}")
-    print("=" * 50)
+    print(f"S.H.I.E.L.D FL Client: {args.client_id}\n")
 
     # Step 1: Load local hospital data
     X, y = load_hospital_data(args.data, args.hospital)

@@ -49,9 +49,7 @@ def run_client(client_id, hospital_id):
     return result.returncode == 0
 
 def main():
-    print("=" * 60)
-    print("S.H.I.E.L.D Federated Learning Demo")
-    print("=" * 60)
+    print("S.H.I.E.L.D Federated Learning Demo\n")
 
     # Check dataset exists
     if not os.path.exists(dataset):

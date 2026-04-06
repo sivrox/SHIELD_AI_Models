@@ -251,11 +251,8 @@ def get_history():
 
 if __name__ == "__main__":
     import uvicorn
-    print("=" * 50)
-    print("S.H.I.E.L.D FL Aggregator Server")
-    print("=" * 50)
+    print("S.H.I.E.L.D FL Aggregator Server\n")
     print(f"  Min clients for aggregation: {min_clients}")
     print(f"  Model output: {tflite_path}")
     print(f"  Starting on http://localhost:8080")
-    print("=" * 50)
     uvicorn.run(app, host="0.0.0.0", port=8080)
