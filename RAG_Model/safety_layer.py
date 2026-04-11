@@ -41,11 +41,9 @@ EMERGENCY_KEYWORDS = {
 }
 
 DISCLAIMER = (
-    "\n\n⚠️ Disclaimer: The informations provided are for educational purposes only "
-    "and is not a medical diagnosis, treatment, or prescription. "
-    "Please consult a qualified healthcare professional."
+    "\n\nMedical Disclaimer:\nThis information is provided for educational and informational purposes only and is not intended to serve as medical advice, diagnosis, or treatment.\n\n"
+    "Always consult a qualified healthcare professional for medical advice, diagnosis, or treatment, especially if you experience concerning symptoms or significant changes in your health."
 )
-
 
 def detect_emergency(text):
     text = text.lower()
