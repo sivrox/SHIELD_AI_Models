@@ -37,8 +37,10 @@ def index():
 
 @app.route('/api/v1/ask-shield', methods=['POST'])
 def ask_ai():
+    print("\n--- [SERVER] INCOMING REQUEST RECEIVED FROM MOBILE APP ---")
     data = request.json
     user_query = data.get('question', '')
+    print(f"Question: {user_query}")
     vitals_context = data.get('vitals_snapshot', 'No recent vitals.')
     user_profile = data.get('profile', 'General Patient.')
 
